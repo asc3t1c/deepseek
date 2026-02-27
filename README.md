@@ -1,1 +1,1 @@
-# deepseek
+# DeepSeek for security researchers
