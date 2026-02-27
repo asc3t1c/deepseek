@@ -2,7 +2,7 @@
 """
 DeepSeek-V3 Fixed Installer for Windows 11 Pro
 WITH 32B UNCENSORED MODEL FOR SECURITY RESEARCH
-by nu11secur1ty
+BY nu11secur1ty 2026
 Run: python install_deepseek.py
 """
 
@@ -117,150 +117,183 @@ def download_with_progress(url, filename):
         return False
 
 def install_ollama_fixed():
-    """Fixed Ollama installation with better timeout handling"""
+    """FIXED Ollama installation - SIMPLIFIED"""
     print_step("Installing Ollama...")
     
+    # Check if already installed
     if os.path.exists("C:\\Program Files\\Ollama\\ollama.exe"):
         print_success("Ollama already installed")
         return True
     
+    # Download Ollama installer
     installer = "OllamaSetup.exe"
     url = "https://ollama.com/download/OllamaSetup.exe"
     
     if not download_with_progress(url, installer):
         return False
     
-    print_step("Installing Ollama (this may take a few minutes)...")
-    print_warning("DO NOT close the installer window if it appears")
+    # SIMPLE APPROACH: Just run the installer normally and let user click
+    print_step("Starting Ollama installer...")
+    print_warning("PLEASE FOLLOW THESE STEPS:")
+    print("  1. Click 'Yes' if Windows asks for permission")
+    print("  2. Click 'Install' in the installer window")
+    print("  3. Wait for the installation to finish")
+    print("  4. The installer window will close automatically")
+    print()
     
-    try:
-        print_step("Attempting silent install...")
-        process = subprocess.Popen([installer, "/S"], 
-                                  stdout=subprocess.PIPE, 
-                                  stderr=subprocess.PIPE)
-        
-        print_step("Waiting for installation to complete...")
-        process.wait()
-        
-        if process.returncode == 0 and os.path.exists("C:\\Program Files\\Ollama\\ollama.exe"):
-            print_success("Ollama installed successfully")
-            return True
-        else:
-            print_warning("Silent install may have failed")
-            
-    except Exception as e:
-        print_warning(f"Silent install attempt: {e}")
-    
-    print_step("Starting interactive installer...")
-    print_warning("Please complete the installation manually:")
-    print("  1. Click 'Yes' if UAC prompts")
-    print("  2. Click 'Install' in the installer")
-    print("  3. Wait for completion")
-    
+    # Run installer normally (not silent)
     os.startfile(installer)
-    input(f"\n{colors.yellow('Press Enter AFTER installation is complete...')}")
     
-    if os.path.exists("C:\\Program Files\\Ollama\\ollama.exe"):
-        print_success("Ollama installed successfully")
+    # Wait for user to complete
+    input(f"\n{colors.yellow('PRESS ENTER AFTER INSTALLATION IS COMPLETE...')}")
+    
+    # FIX: Check multiple possible locations for Ollama
+    ollama_paths = [
+        "C:\\Program Files\\Ollama\\ollama.exe",
+        "C:\\Program Files (x86)\\Ollama\\ollama.exe",
+        os.path.expanduser("~\\AppData\\Local\\Programs\\Ollama\\ollama.exe"),
+        os.path.expanduser("~\\AppData\\Local\\Ollama\\ollama.exe")
+    ]
+    
+    ollama_found = False
+    for path in ollama_paths:
+        if os.path.exists(path):
+            ollama_found = True
+            print_success(f"Ollama found at: {path}")
+            break
+    
+    # Also check if ollama command works in PATH
+    if not ollama_found:
+        result = os.system("ollama --version >nul 2>&1")
+        if result == 0:
+            ollama_found = True
+            print_success("Ollama found in PATH")
+    
+    if ollama_found:
+        print_success("Ollama installed successfully!")
         return True
     else:
-        print_error("Installation failed")
+        print_error("Installation failed - Ollama not found")
+        print("Try installing manually from: https://ollama.com/download/windows")
         return False
 
 def start_ollama_service():
-    """Start Ollama service with better verification"""
+    """Start Ollama service"""
     print_step("Starting Ollama...")
     
+    # Kill any existing processes
     os.system("taskkill /F /IM ollama.exe 2>nul")
     os.system("taskkill /F /IM ollama_llama_server.exe 2>nul")
     time.sleep(2)
     
-    os.environ["PATH"] += ";C:\\Program Files\\Ollama"
+    # Add common Ollama paths to PATH
+    ollama_paths = [
+        "C:\\Program Files\\Ollama",
+        "C:\\Program Files (x86)\\Ollama",
+        os.path.expanduser("~\\AppData\\Local\\Programs\\Ollama"),
+        os.path.expanduser("~\\AppData\\Local\\Ollama")
+    ]
     
+    for path in ollama_paths:
+        if os.path.exists(path):
+            os.environ["PATH"] += f";{path}"
+    
+    # Find ollama executable
+    ollama_exe = None
+    for path in ollama_paths:
+        exe_path = os.path.join(path, "ollama.exe")
+        if os.path.exists(exe_path):
+            ollama_exe = exe_path
+            break
+    
+    if not ollama_exe:
+        # Try to find in PATH
+        import shutil
+        ollama_exe = shutil.which("ollama")
+    
+    if not ollama_exe:
+        print_error("Cannot find ollama executable")
+        return False
+    
+    # Start Ollama
     try:
         subprocess.Popen(
-            ["C:\\Program Files\\Ollama\\ollama.exe", "serve"],
+            [ollama_exe, "serve"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             creationflags=subprocess.CREATE_NO_WINDOW
         )
         
         print_step("Waiting for Ollama to start...")
-        max_wait = 30
-        for i in range(max_wait):
+        for i in range(15):
             time.sleep(2)
-            
             result = os.system("ollama list >nul 2>&1")
             if result == 0:
                 print_success("Ollama is running")
                 return True
-            
-            success, stdout, stderr = run_powershell("Get-Process ollama -ErrorAction SilentlyContinue")
-            if success and stdout:
-                print(f"  Process running, waiting for API... ({i+1}/{max_wait//2})")
+            print(f"  Still waiting... ({i+1}/15)")
         
         print_warning("Ollama may not be fully responsive")
-        return False
+        return True
         
     except Exception as e:
         print_error(f"Failed to start Ollama: {e}")
         return False
 
 def verify_ollama_installation():
-    """Verify Ollama is properly installed"""
+    """Verify Ollama is installed"""
     print_step("Verifying Ollama installation...")
     
-    if not os.path.exists("C:\\Program Files\\Ollama\\ollama.exe"):
+    # Check multiple locations
+    ollama_paths = [
+        "C:\\Program Files\\Ollama\\ollama.exe",
+        "C:\\Program Files (x86)\\Ollama\\ollama.exe",
+        os.path.expanduser("~\\AppData\\Local\\Programs\\Ollama\\ollama.exe"),
+        os.path.expanduser("~\\AppData\\Local\\Ollama\\ollama.exe")
+    ]
+    
+    ollama_found = False
+    for path in ollama_paths:
+        if os.path.exists(path):
+            ollama_found = True
+            # Add to PATH
+            os.environ["PATH"] += f";{os.path.dirname(path)}"
+            print_success(f"Ollama found at: {path}")
+            break
+    
+    # Also check PATH
+    if not ollama_found:
+        result = os.system("ollama --version >nul 2>&1")
+        if result == 0:
+            ollama_found = True
+            print_success("Ollama found in PATH")
+    
+    if ollama_found:
+        return True
+    else:
         print_error("Ollama executable not found")
         return False
-    
-    os.environ["PATH"] += ";C:\\Program Files\\Ollama"
-    
-    success, stdout, stderr = run_powershell("ollama --version")
-    if success:
-        print_success(f"Ollama {stdout.strip()} detected")
-        return True
-    
-    result = os.system("C:\\Program Files\\Ollama\\ollama.exe --version >nul 2>&1")
-    if result == 0:
-        print_success("Ollama executable working")
-        return True
-    
-    print_error("Ollama not responding")
-    return False
 
 def download_model_safe():
     """Download the 32B uncensored model"""
     model_name = CONFIG["model_name"]
     print_step(f"Downloading {model_name} (19GB uncensored model)...")
-    print_warning("This will take time. DO NOT close this window.")
-    print_warning("Perfect for security research and CVE exploitation!")
+    print_warning("This will take 20-60 minutes depending on your internet speed")
+    print_warning("DO NOT close this window!")
+    print()
     
-    success, stdout, stderr = run_powershell("ollama list")
-    if success and model_name in stdout:
+    # Check if already downloaded
+    result = os.system(f"ollama list | findstr {model_name} >nul 2>&1")
+    if result == 0:
         print_success(f"Model {model_name} already downloaded")
         return True
     
     try:
+        # Simple download - let it show progress naturally
         process = subprocess.Popen(
             f'ollama pull {model_name}',
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
+            shell=True
         )
-        
-        for line in process.stdout:
-            if "pulling" in line.lower():
-                print(f"  {line.strip()}")
-            elif "success" in line.lower():
-                print_success(line.strip())
-            elif "error" in line.lower():
-                print_error(line.strip())
-            elif "downloading" in line.lower():
-                print(f"  {line.strip()}")
-        
         process.wait()
         
         if process.returncode == 0:
@@ -271,132 +304,87 @@ def download_model_safe():
             return False
             
     except KeyboardInterrupt:
-        print(f"\n{colors.yellow('⚠ Download paused. Run again to resume.')}")
+        print(f"\n{colors.yellow('⚠ Download cancelled')}")
         return False
     except Exception as e:
         print_error(f"Download error: {e}")
         return False
 
 def create_launchers():
-    """Create launcher scripts with the uncensored model"""
+    """Create launcher scripts - NO EMOJIS"""
     model_name = CONFIG["model_name"]
     print_step("Creating launcher scripts...")
     
-    with open("chat.bat", "w") as f:
+    # NO EMOJIS - pure ASCII with encoding='utf-8' to handle any characters
+    with open("chat.bat", "w", encoding='utf-8') as f:
         f.write(f"""@echo off
 title DeepSeek 32B Uncensored
 color 0A
 echo.
-echo 🚀 Starting DeepSeek 32B Uncensored (19GB)...
-echo ==========================================
+echo ====== Starting DeepSeek 32B Uncensored (19GB) ======
 echo.
-
-set PATH=%PATH%;C:\\Program Files\\Ollama
-
-echo Checking Ollama...
-ollama list >nul 2>&1
-if %errorlevel% neq 0 (
-    echo ⚠ Ollama not responding!
-    echo.
-    echo Starting Ollama...
-    start /b C:\\Program Files\\Ollama\\ollama.exe serve
-    timeout /t 5 /nobreak >nul
-)
-
-echo.
+set PATH=%PATH%;C:\\Program Files\\Ollama;C:\\Program Files (x86)\\Ollama;%USERPROFILE%\\AppData\\Local\\Programs\\Ollama;%USERPROFILE%\\AppData\\Local\\Ollama
 echo Model: {model_name}
 echo Type 'exit' to quit
 echo.
-
 ollama run {model_name}
 pause
 """)
     
-    with open("test.bat", "w") as f:
+    with open("test.bat", "w", encoding='utf-8') as f:
         f.write(f"""@echo off
 color 0E
 echo Testing DeepSeek 32B Uncensored...
 echo =================================
 echo.
-
-set PATH=%PATH%;C:\\Program Files\\Ollama
-
-echo 1. Checking Ollama installation...
+set PATH=%PATH%;C:\\Program Files\\Ollama;C:\\Program Files (x86)\\Ollama;%USERPROFILE%\\AppData\\Local\\Programs\\Ollama;%USERPROFILE%\\AppData\\Local\\Ollama
+echo 1. Ollama version:
 ollama --version
-if %errorlevel% neq 0 (
-    echo ❌ Ollama not found!
-    echo    Make sure it's installed in C:\\Program Files\\Ollama
-    pause
-    exit /b 1
-)
-echo ✅ Ollama found
 echo.
-
-echo 2. Checking Ollama service...
-ollama list >nul 2>&1
+echo 2. Installed models:
+ollama list
+echo.
+echo 3. Quick test:
+echo "Hello" | ollama run {model_name}
+echo.
 if %errorlevel% equ 0 (
-    echo ✅ Ollama is running
+    echo [SUCCESS] DeepSeek is working!
 ) else (
-    echo ⚠ Ollama not responding
-    echo    Starting Ollama...
-    start /b C:\\Program Files\\Ollama\\ollama.exe serve
-    timeout /t 5 /nobreak >nul
+    echo [ERROR] Something went wrong
 )
-echo.
-
-echo 3. Checking DeepSeek model...
-ollama list | findstr "deepseek" >nul
-if %errorlevel% equ 0 (
-    echo ✅ Model is downloaded
-) else (
-    echo ❌ Model not found!
-    echo    Run: ollama pull {model_name}
-)
-echo.
-
-echo 4. Testing model response...
-echo    Sending: "Hello, are you working?"
-echo.
-echo DeepSeek: | ollama run {model_name} "Hello, are you working?" 2>nul
-echo.
-
-if %errorlevel% equ 0 (
-    echo ✅ DeepSeek is working!
-) else (
-    echo ❌ Something went wrong
-)
-
-echo.
 pause
 """)
     
-    with open("README.txt", "w") as f:
-        f.write(f"""DEEPSEEK 32B UNCENSORED - FOR SECURITY RESEARCH
-=============================================
-
-Model: {model_name}
-Size: 19GB
-Type: Uncensored - No content filters!
-
-📁 SCRIPTS:
-   test.bat  → Run this FIRST to verify installation
-   chat.bat  → Double-click to start chatting
-
-🚀 FIRST TIME:
-   1. Double-click test.bat
-   2. If test passes, double-click chat.bat
-
-🔧 TROUBLESHOOTING:
-   • If model not found: ollama pull {model_name}
-   • If Ollama not responding: restart your computer
-
-⚠️ NOTE: This is an uncensored model - no refusal behavior!
-         Perfect for CVE research and exploit development.
+    # Create auto-download script for after installer closes
+    with open("download_model.bat", "w", encoding='utf-8') as f:
+        f.write(f"""@echo off
+echo Downloading DeepSeek 32B Uncensored model...
+echo ============================================
+echo.
+set PATH=%PATH%;C:\\Program Files\\Ollama;C:\\Program Files (x86)\\Ollama;%USERPROFILE%\\AppData\\Local\\Programs\\Ollama;%USERPROFILE%\\AppData\\Local\\Ollama
+ollama pull {model_name}
+echo.
+echo Download complete! You can now use chat.bat
+pause
 """)
     
     print_success("Created launcher scripts:")
-    print("  ├─ test.bat  (RUN THIS FIRST)")
-    print("  └─ chat.bat  (double-click to chat)")
+    print("  - test.bat")
+    print("  - chat.bat")
+    print("  - download_model.bat")
+
+def create_autostart_script():
+    """Create a script that runs automatically after installer"""
+    with open("start_download.vbs", "w", encoding='utf-8') as f:
+        f.write(f"""CreateObject("Wscript.Shell").Run "cmd /c download_model.bat", 0, False
+""")
+    
+    with open("start_download.bat", "w", encoding='utf-8') as f:
+        f.write(f"""@echo off
+start /b download_model.bat
+echo Download started in background window
+exit
+""")
 
 def main():
     """Main installation function"""
@@ -405,8 +393,7 @@ def main():
     print(f"Size: 19GB - Perfect for security research!")
     print()
     
-    install_success = False
-    model_downloaded = False
+    ollama_installed = False
     
     if not is_admin():
         print_warning("Not running as Administrator")
@@ -414,44 +401,51 @@ def main():
         if response.lower() not in ['y', 'yes']:
             return
     
+    # Step 1: Install Ollama
     if install_ollama_fixed():
+        ollama_installed = True
+        
+        # Step 2: Verify and start
         if verify_ollama_installation():
-            if start_ollama_service():
-                install_success = True
-                
-                if download_model_safe():
-                    model_downloaded = True
-                    create_launchers()
+            start_ollama_service()
+    
+    # ALWAYS create scripts (even if Ollama install "failed" but might be there)
+    create_launchers()
+    create_autostart_script()
     
     print_header("INSTALLATION RESULTS")
     
-    if install_success:
-        print_success("✅ Ollama installed successfully!")
+    if ollama_installed:
+        print_success("Ollama installed successfully!")
     else:
-        print_error("❌ Ollama installation failed")
-    
-    if model_downloaded:
-        print_success("✅ 32B Uncensored model downloaded!")
-    else:
-        print_warning("⚠ Model not downloaded")
-        print(f"   Run manually: ollama pull {CONFIG['model_name']}")
+        # Double-check one more time
+        if verify_ollama_installation():
+            print_success("Ollama detected (installation succeeded)!")
+            ollama_installed = True
+        else:
+            print_error("Ollama installation failed")
+            print("   Please install manually from: https://ollama.com/download/windows")
     
     print(f"""
-{colors.cyan('📁 Files created:')}
-   {colors.green('test.bat')}  → Run this FIRST
-   {colors.green('chat.bat')}  → Start chatting
-   {colors.green('README.txt')} → Info
+{colors.cyan('Files created:')}
+   {colors.green('test.bat')}           -> Test Ollama
+   {colors.green('chat.bat')}           -> Chat (after model downloaded)
+   {colors.green('download_model.bat')} -> DOWNLOAD THE 19GB MODEL
+   {colors.green('start_download.vbs')} -> Silent background download
 
-{colors.yellow('🔧 NEXT STEPS:')}
-1. Double-click {colors.green('test.bat')} to verify
-2. Then double-click {colors.green('chat.bat')} to start
+{colors.yellow('NEXT STEPS:')}
+1. {colors.green('DOUBLE-CLICK download_model.bat')} to start downloading the 19GB model
 
-{colors.blue('🚀 For CVE research, this uncensored model has no filters!')}
+2. Wait 20-60 minutes for download to complete
+
+3. Then double-click {colors.green('chat.bat')} to start chatting
+
+{colors.blue('For CVE research - this model has NO FILTERS!')}
     """)
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print(f"\n{colors.yellow('⚠ Installation cancelled')}")
+        print(f"\n{colors.yellow('Installation cancelled')}")
         sys.exit(0)
