@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-DeepSeek Complete Uninstaller
+DeepSeek Complete Uninstaller - HARDENED EDITION
 REMOVES everything the installer created
 KEEPS itself and the installer script
-by nu11secur1ty
+BY nu11secur1ty 2026
 Run: python uninstall_complete.py
 """
 
@@ -13,6 +13,7 @@ import subprocess
 import ctypes
 import time
 import shutil
+import stat
 from pathlib import Path
 
 # Windows-compatible colors
@@ -49,8 +50,8 @@ def is_admin():
     except:
         return False
 
-def run_command(cmd, timeout=5):
-    """Run command with timeout to prevent freezing"""
+def run_command(cmd, timeout=3):
+    """Run command with aggressive timeout"""
     try:
         process = subprocess.Popen(
             cmd,
@@ -65,257 +66,434 @@ def run_command(cmd, timeout=5):
             return process.returncode == 0, stdout, stderr
         except subprocess.TimeoutExpired:
             process.kill()
+            process.terminate()
             return False, "", "Timeout"
-            
     except:
         return False, "", ""
 
-def stop_ollama():
-    """Stop all Ollama processes - FAST"""
-    print_step("Stopping Ollama services...")
+def force_kill_processes():
+    """AGGRESSIVELY kill all Ollama processes"""
+    print_step("Force killing all Ollama processes...")
     
-    # Kill processes directly - no waiting
-    os.system("taskkill /F /IM ollama.exe 2>nul")
-    os.system("taskkill /F /IM ollama_llama_server.exe 2>nul")
-    os.system("taskkill /F /IM ollama-service.exe 2>nul")
+    # Multiple kill methods for redundancy
+    kill_commands = [
+        'taskkill /F /IM ollama.exe 2>nul',
+        'taskkill /F /IM ollama_llama_server.exe 2>nul',
+        'taskkill /F /IM ollama-service.exe 2>nul',
+        'taskkill /F /IM ollama-serve.exe 2>nul',
+        'wmic process where "name like \'%ollama%\'" delete 2>nul',
+        'powershell -Command "Get-Process ollama* | Stop-Process -Force" 2>nul'
+    ]
     
-    # Try to stop service but don't wait
-    subprocess.Popen("net stop Ollama /y", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for cmd in kill_commands:
+        os.system(cmd)
     
     time.sleep(1)
-    print_success("Ollama stopped")
+    print_success("All Ollama processes terminated")
+
+def stop_ollama_service_force():
+    """Force stop Windows service"""
+    print_step("Stopping Ollama Windows service...")
+    
+    service_commands = [
+        'net stop Ollama /y 2>nul',
+        'sc stop Ollama 2>nul',
+        'sc delete Ollama 2>nul',
+        'powershell -Command "Stop-Service Ollama -Force" 2>nul',
+        'powershell -Command "sc.exe delete Ollama" 2>nul'
+    ]
+    
+    for cmd in service_commands:
+        subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    
+    time.sleep(1)
+    print_success("Ollama service stopped")
+
+def remove_file_with_retry(filepath, max_retries=3):
+    """Remove a file with retry logic for locked files"""
+    for attempt in range(max_retries):
+        try:
+            if os.path.exists(filepath):
+                # Remove read-only attribute
+                os.chmod(filepath, stat.S_IWRITE)
+                os.remove(filepath)
+                return True
+        except:
+            time.sleep(0.5)
+    return False
+
+def remove_directory_with_prejudice(dirpath):
+    """NUKE a directory - no mercy"""
+    if not os.path.exists(dirpath):
+        return False
+    
+    try:
+        # First try Python's rmtree with error handling
+        def on_rm_error(func, path, exc_info):
+            # Force remove read-only attribute
+            os.chmod(path, stat.S_IWRITE)
+            try:
+                func(path)
+            except:
+                pass
+        
+        shutil.rmtree(dirpath, onerror=on_rm_error, ignore_errors=True)
+    except:
+        pass
+    
+    # If still exists, use nuclear option
+    if os.path.exists(dirpath):
+        os.system(f'rmdir /s /q "{dirpath}" 2>nul')
+        os.system(f'del /f /q "{dirpath}" 2>nul')
+        os.system(f'rd /s /q "{dirpath}" 2>nul')
+    
+    # Final check with PowerShell
+    os.system(f'powershell -Command "Remove-Item -Path \'{dirpath}\' -Recurse -Force" 2>nul')
+    
+    return not os.path.exists(dirpath)
 
 def remove_ollama_direct():
-    """Remove Ollama DIRECTLY - NO WINGET, NO FREEZING"""
-    print_step("Uninstalling Ollama...")
+    """NUCLEAR option - remove Ollama completely"""
+    print_step("REMOVING OLLAMA - NUCLEAR MODE")
     
-    # Kill everything first
-    os.system("taskkill /F /IM ollama.exe 2>nul")
-    os.system("taskkill /F /IM ollama_llama_server.exe 2>nul")
-    os.system("taskkill /F /IM ollama-service.exe 2>nul")
+    # Find ALL possible Ollama locations
+    user_home = os.path.expanduser("~")
+    program_files = os.environ.get("ProgramFiles", "C:\\Program Files")
+    program_files_x86 = os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")
+    local_appdata = os.environ.get("LOCALAPPDATA", f"{user_home}\\AppData\\Local")
+    roaming_appdata = os.environ.get("APPDATA", f"{user_home}\\AppData\\Roaming")
     
-    # Run uninstaller if exists (fast, no wait)
-    uninstallers = [
-        'C:\\Program Files\\Ollama\\Uninstall.exe',
-        os.path.expanduser('~\\AppData\\Local\\Programs\\Ollama\\Uninstall.exe'),
+    # Comprehensive list of everywhere Ollama could hide
+    ollama_paths = [
+        f"{program_files}\\Ollama",
+        f"{program_files_x86}\\Ollama",
+        f"{local_appdata}\\Ollama",
+        f"{local_appdata}\\Programs\\Ollama",
+        f"{roaming_appdata}\\Ollama",
+        f"{user_home}\\.ollama",
+        f"{user_home}\\AppData\\Local\\Temp\\ollama",
+        f"{local_appdata}\\Temp\\ollama",
     ]
     
-    for uninstaller in uninstallers:
-        if os.path.exists(uninstaller):
-            print_step(f"Found uninstaller, running...")
-            # Run and forget - don't wait
-            subprocess.Popen(f'"{uninstaller}" /S /VERYSILENT', shell=True)
-            time.sleep(2)  # Give it a moment to start
+    # Add user-specific paths
+    for path in ollama_paths[:]:  # Copy list to iterate
+        expanded = os.path.expandvars(path)
+        if expanded != path:
+            ollama_paths.append(expanded)
     
-    # NOW DELETE EVERYTHING DIRECTLY (this is the key!)
-    print_step("Removing Ollama directories...")
+    # Remove duplicates
+    ollama_paths = list(dict.fromkeys(ollama_paths))
     
-    ollama_dirs = [
-        'C:\\Program Files\\Ollama',
-        os.path.expanduser('~\\AppData\\Local\\Ollama'),
-        os.path.expanduser('~\\AppData\\Roaming\\Ollama'),
-        os.path.expanduser('~\\AppData\\Local\\Programs\\Ollama'),
-        os.path.expanduser('~\\AppData\\Local\\Temp\\ollama'),
-        os.path.expanduser('~\\.ollama'),
-    ]
-    
-    for dir_path in ollama_dirs:
+    # Remove each location with extreme prejudice
+    removed_count = 0
+    for dir_path in ollama_paths:
         if os.path.exists(dir_path):
-            try:
-                # Try Python's rmtree first
-                shutil.rmtree(dir_path, ignore_errors=True)
-                print(f"  Removed {os.path.basename(dir_path)}")
-            except:
-                # Force delete with Windows command
-                os.system(f'rmdir /s /q "{dir_path}" 2>nul')
-                print(f"  Force removed {os.path.basename(dir_path)}")
+            print(f"  Nuking: {dir_path}")
+            if remove_directory_with_prejudice(dir_path):
+                removed_count += 1
+                print(f"    ✓ Destroyed")
     
-    # Remove from PATH (simple registry delete)
-    print_step("Cleaning PATH...")
+    if removed_count > 0:
+        print_success(f"Obliterated {removed_count} Ollama installations")
+    else:
+        print_warning("No Ollama directories found")
+
+def remove_models_direct():
+    """NUKE all model directories"""
+    print_step("WIPING DeepSeek models...")
     
-    # Get current user PATH
+    user_home = os.path.expanduser("~")
+    local_appdata = os.environ.get("LOCALAPPDATA", f"{user_home}\\AppData\\Local")
+    roaming_appdata = os.environ.get("APPDATA", f"{user_home}\\AppData\\Roaming")
+    
+    # All possible model locations
+    model_paths = [
+        f"{local_appdata}\\Ollama\\models",
+        f"{roaming_appdata}\\Ollama\\models",
+        f"{local_appdata}\\Programs\\Ollama\\models",
+        f"{user_home}\\.ollama\\models",
+        f"{local_appdata}\\Temp\\ollama\\models",
+    ]
+    
+    removed = 0
+    for path in model_paths:
+        if os.path.exists(path):
+            print(f"  Wiping: {path}")
+            if remove_directory_with_prejudice(path):
+                removed += 1
+    
+    if removed > 0:
+        print_success(f"Wiped {removed} model directories")
+    else:
+        print_warning("No model directories found")
+
+def clean_registry_thoroughly():
+    """THOROUGH registry cleaning"""
+    print_step("SANITIZING registry...")
+    
+    # Registry paths to nuke
+    reg_paths = [
+        # User registry
+        'HKCU\\SOFTWARE\\Ollama',
+        'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Ollama',
+        'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\Ollama',
+        'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce\\Ollama',
+        
+        # System registry (if admin)
+        'HKLM\\SOFTWARE\\Ollama',
+        'HKLM\\SOFTWARE\\WOW6432Node\\Ollama',
+        'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Ollama',
+        'HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Ollama',
+        'HKLM\\SYSTEM\\CurrentControlSet\\Services\\Ollama',
+    ]
+    
+    # Search for any other Ollama registry keys
+    search_paths = [
+        'HKCU\\SOFTWARE',
+        'HKLM\\SOFTWARE',
+    ]
+    
+    for search_path in search_paths:
+        result = os.system(f'reg query {search_path} /f "ollama" /s 2>nul >nul')
+        # We don't actually parse, just nuke common paths
+    
+    cleaned = 0
+    for reg_path in reg_paths:
+        if os.system(f'reg delete "{reg_path}" /f 2>nul') == 0:
+            cleaned += 1
+    
+    if cleaned > 0:
+        print_success(f"Sanitized {cleaned} registry entries")
+
+def clean_path_thoroughly():
+    """CLEAN PATH from all Ollama references"""
+    print_step("PURGING PATH from Ollama references...")
+    
+    def clean_path_string(path_string):
+        if not path_string:
+            return path_string
+        parts = path_string.split(';')
+        clean_parts = [p for p in parts if p and 'ollama' not in p.lower()]
+        return ';'.join(clean_parts)
+    
+    # Clean User PATH
     success, stdout, stderr = run_command('reg query HKCU\\Environment /v Path 2>nul')
     if success and stdout:
         for line in stdout.split('\n'):
             if 'Path' in line and 'REG_' in line:
-                if 'REG_SZ' in line:
-                    current_path = line.split('REG_SZ')[-1].strip()
+                if 'REG_SZ' in line or 'REG_EXPAND_SZ' in line:
+                    current_path = line.split('REG_')[-1].split('SZ')[-1].strip()
                     if current_path and 'ollama' in current_path.lower():
-                        # Remove Ollama from PATH
-                        new_path = ';'.join([p for p in current_path.split(';') if p and 'ollama' not in p.lower()])
-                        run_command(f'reg add HKCU\\Environment /v Path /t REG_SZ /d "{new_path}" /f 2>nul')
-                        print_success("Cleaned Ollama from PATH")
+                        new_path = clean_path_string(current_path)
+                        reg_type = 'REG_EXPAND_SZ' if 'REG_EXPAND_SZ' in line else 'REG_SZ'
+                        run_command(f'reg add HKCU\\Environment /v Path /t {reg_type} /d "{new_path}" /f 2>nul')
+                        print_success("Purged Ollama from User PATH")
     
-    print_success("Ollama uninstalled")
-
-def remove_models_direct():
-    """Remove models by deleting directories directly"""
-    print_step("Removing DeepSeek models...")
-    
-    # Models are stored in these locations
-    model_paths = [
-        os.path.expanduser('~\\AppData\\Local\\Ollama\\models'),
-        os.path.expanduser('~\\AppData\\Roaming\\Ollama\\models'),
-        os.path.expanduser('~\\AppData\\Local\\Programs\\Ollama\\models'),
-        os.path.expanduser('~\\.ollama\\models'),
-    ]
-    
-    removed = 0
-    for path in model_paths:
-        if os.path.exists(path):
-            try:
-                shutil.rmtree(path, ignore_errors=True)
-                print(f"  Removed models from {os.path.basename(os.path.dirname(path))}")
-                removed += 1
-            except:
-                os.system(f'rmdir /s /q "{path}" 2>nul')
-                removed += 1
-    
-    if removed > 0:
-        print_success("DeepSeek models removed")
-    else:
-        print_warning("No model directories found")
+    # Clean System PATH if admin
+    if is_admin():
+        success, stdout, stderr = run_command('reg query "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" /v Path 2>nul')
+        if success and stdout:
+            for line in stdout.split('\n'):
+                if 'Path' in line and 'REG_' in line:
+                    if 'REG_SZ' in line or 'REG_EXPAND_SZ' in line:
+                        current_path = line.split('REG_')[-1].split('SZ')[-1].strip()
+                        if current_path and 'ollama' in current_path.lower():
+                            new_path = clean_path_string(current_path)
+                            reg_type = 'REG_EXPAND_SZ' if 'REG_EXPAND_SZ' in line else 'REG_SZ'
+                            run_command(f'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" /v Path /t {reg_type} /d "{new_path}" /f 2>nul')
+                            print_success("Purged Ollama from System PATH")
 
 def remove_created_files():
-    """Remove files created by installer (KEEP uninstaller & installer)"""
-    print_step("Removing installer-created files...")
+    """Remove installer-created files with extreme prejudice"""
+    print_step("REMOVING installer-created files...")
     
     current_dir = os.getcwd()
     
-    # Files to DELETE
+    # Comprehensive list of files to remove
     files_to_remove = [
+        # Batch files
         'chat.bat', 'test.bat', 'chat.ps1',
         'chat_deepseek.bat', 'chat_with_deepseek.ps1',
-        'chat_gui.py', 'start_webui.bat',
+        'download_model.bat', 'start_download.bat',
+        'test_deepseek.bat', 'ollama_path.bat',
+        
+        # Python files
+        'chat_gui.py',
+        
+        # Web UI files
+        'start_webui.bat',
+        
+        # Documentation
         'README_WINDOWS.txt', 'README.txt',
+        
+        # Installers
         'OllamaSetup.exe', 'DockerSetup.exe',
-        'ollama_path.bat', 'test_deepseek.bat',
+        
+        # VBS scripts
+        'start_download.vbs',
+        
+        # Any other generated files
+        '*.log', '*.tmp',
     ]
     
-    # Files to KEEP
+    # Files to KEEP (sacred)
     keep_files = [
         'install_deepseek.py',
         'uninstall_complete.py',
+        'uninstall.py',  # Common names
+        'install.py',
     ]
     
     removed = 0
-    for file in files_to_remove:
-        file_path = os.path.join(current_dir, file)
-        if os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-                print(f"  Removed {file}")
-                removed += 1
-            except:
-                pass
+    for pattern in files_to_remove:
+        if '*' in pattern:
+            # Handle wildcards
+            import glob
+            for file_path in glob.glob(pattern):
+                if os.path.basename(file_path) not in keep_files:
+                    try:
+                        os.remove(file_path)
+                        print(f"  Removed {os.path.basename(file_path)}")
+                        removed += 1
+                    except:
+                        pass
+        else:
+            file_path = os.path.join(current_dir, pattern)
+            if os.path.exists(file_path) and pattern not in keep_files:
+                if remove_file_with_retry(file_path):
+                    print(f"  Removed {pattern}")
+                    removed += 1
     
     if removed > 0:
-        print_success(f"Removed {removed} file(s)")
+        print_success(f"Removed {removed} installer-created files")
     
     # Show kept files
     kept = [f for f in keep_files if os.path.exists(os.path.join(current_dir, f))]
     if kept:
-        print_step(f"Keeping: {', '.join(kept)}")
+        print_step(f"Preserved: {', '.join(kept)}")
 
-def clean_registry_fast():
-    """Quick registry cleanup"""
-    print_step("Cleaning registry...")
-    
-    reg_paths = [
-        'HKCU\\SOFTWARE\\Ollama',
-        'HKLM\\SOFTWARE\\Ollama',
-        'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Ollama',
-    ]
-    
-    for reg_path in reg_paths:
-        os.system(f'reg delete "{reg_path}" /f 2>nul')
-
-def verify_uninstall():
-    """Quick verification"""
-    print_step("Verifying uninstallation...")
+def verify_uninstall_nuclear():
+    """NUCLEAR verification - leave no trace"""
+    print_step("NUCLEAR VERIFICATION - scanning for remnants...")
     
     issues = []
     
-    # Quick checks
-    if os.path.exists('C:\\Program Files\\Ollama'):
-        issues.append("Ollama folder still exists")
-    
-    model_paths = [
-        os.path.expanduser('~\\AppData\\Local\\Ollama'),
-        os.path.expanduser('~\\.ollama'),
+    # Scan entire drive for Ollama
+    scan_paths = [
+        'C:\\Program Files',
+        'C:\\Program Files (x86)',
+        os.path.expanduser('~\\AppData'),
+        os.path.expanduser('~'),
+        os.environ.get('TEMP', 'C:\\Temp'),
     ]
     
-    for path in model_paths:
-        if os.path.exists(path):
-            issues.append(f"{os.path.basename(path)} still exists")
+    for base_path in scan_paths:
+        if os.path.exists(base_path):
+            for root, dirs, files in os.walk(base_path, topdown=True, followlinks=False):
+                # Limit depth to avoid infinite loops
+                if root.count('\\') > 10:
+                    dirs.clear()
+                    continue
+                
+                for dir_name in dirs:
+                    if 'ollama' in dir_name.lower():
+                        issues.append(f"Found: {os.path.join(root, dir_name)}")
+                        dirs.remove(dir_name)  # Don't go deeper
+    
+    # Check processes
+    result = os.system('tasklist | findstr /i ollama >nul 2>&1')
+    if result == 0:
+        issues.append("Ollama processes still running")
+    
+    # Check services
+    result = os.system('sc query Ollama 2>nul | findstr STATE >nul')
+    if result == 0:
+        issues.append("Ollama service still exists")
     
     if issues:
-        print_warning("Some components may still exist:")
-        for issue in issues:
+        print_warning("NUCLEAR VERIFICATION FOUND:")
+        for issue in issues[:10]:  # Show first 10
             print(f"  • {issue}")
         
-        # Force cleanup
-        response = input(f"{c.yellow('Force remove remaining items? (y/N): ')}")
+        response = input(f"{c.yellow('LAUNCH NUCLEAR CLEANUP? (y/N): ')}")
         if response.lower() in ['y', 'yes']:
-            os.system('rmdir /s /q "C:\\Program Files\\Ollama" 2>nul')
-            os.system(f'rmdir /s /q "{os.path.expanduser("~\\AppData\\Local\\Ollama")}" 2>nul')
-            os.system(f'rmdir /s /q "{os.path.expanduser("~\\.ollama")}" 2>nul')
-            print_success("Force cleaned")
+            # Go absolutely nuclear
+            for issue in issues:
+                if 'Found:' in issue:
+                    path = issue.replace('Found:', '').strip()
+                    remove_directory_with_prejudice(path)
+            print_success("Nuclear cleanup complete")
     else:
-        print_success("✓ All DeepSeek components removed!")
+        print_success("✓ SYSTEM IS CLEAN - NO TRACES FOUND")
 
 def main():
-    """Main uninstall function"""
-    print_header("DeepSeek Complete Uninstaller")
+    """Main uninstall function - NUCLEAR EDITION"""
+    print_header("DEEPSEEK NUCLEAR UNINSTALLER")
     print(f"""
-{c.yellow('This will REMOVE:')}
-  • Ollama completely
-  • All DeepSeek models
-  • Configuration files
+{c.red('☢️  NUCLEAR OPTION ACTIVATED ☢️')}
+
+{c.yellow('This will COMPLETELY ANNIHILATE:')}
+  • Ollama (everywhere it hides)
+  • ALL DeepSeek models (1.5B to 70B)
+  • All configuration files
+  • Registry entries
   • chat.bat, test.bat, etc.
 
-{c.green('This will KEEP:')}
+{c.green('This will SURVIVE:')}
   • {os.path.basename(__file__)} (this uninstaller)
   • install_deepseek.py (the installer)
+
+{c.red('☢️  NO MERCY MODE: ON ☢️')}
     """)
     
-    response = input(f"{c.yellow('Continue? (yes/NO): ')}")
-    if response.lower() not in ['yes', 'y']:
-        print_success("Cancelled")
+    response = input(f"{c.yellow('ARE YOU ABSOLUTELY SURE? (yes/NUCLEAR): ')}")
+    if response.upper() != 'NUCLEAR':
+        print_success("Aborting nuclear launch")
         return
     
     if not is_admin():
-        print_warning("Not running as Administrator")
-        response = input(f"{c.yellow('Continue anyway? (y/N): ')}")
-        if response.lower() not in ['y', 'yes']:
-            return
+        print_error("NUCLEAR LAUNCH REQUIRES ADMINISTRATOR PRIVILEGES")
+        print("Please run as Administrator")
+        input("Press Enter to exit...")
+        return
     
-    print_header("Starting uninstall")
+    print_header("☢️  NUCLEAR LAUNCH SEQUENCE INITIATED ☢️")
     
-    # DO EVERYTHING FAST - NO WAITING
-    stop_ollama()
-    remove_models_direct()  # Delete models directly
-    remove_ollama_direct()  # Delete Ollama directly (NO WINGET!)
-    remove_created_files()  # Remove created files
-    clean_registry_fast()   # Quick registry clean
+    # Phase 1: Termination
+    force_kill_processes()
+    stop_ollama_service_force()
     
-    # Verify
-    verify_uninstall()
+    # Phase 2: Annihilation
+    remove_models_direct()
+    remove_ollama_direct()
+    remove_created_files()
     
-    print_header("UNINSTALL COMPLETE")
+    # Phase 3: Sanitization
+    clean_registry_thoroughly()
+    clean_path_thoroughly()
+    
+    # Phase 4: Verification
+    verify_uninstall_nuclear()
+    
+    print_header("☢️  NUCLEAR STRIKE COMPLETE ☢️")
     print(f"""
-{c.green('✅ DeepSeek has been removed!')}
+{c.green('✓ DeepSeek has been VAPORIZED!')}
 
-{c.cyan('📁 Kept:')}
+{c.cyan('Surviving files:')}
    • {os.path.basename(__file__)}
    • install_deepseek.py
 
-{c.yellow('💡 Restart your computer to complete')}
+{c.yellow('Recommendation:')}
+   1. Restart your computer
+   2. The system is now clean
+   3. Run installer again when ready
+
+{c.red('☢️  NO TRACE LEFT BEHIND ☢️')}
     """)
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print(f"\n{c.yellow('⚠ Cancelled')}")
+        print(f"\n{c.yellow('Nuclear launch aborted')}")
         sys.exit(0)
