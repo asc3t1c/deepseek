@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 DeepSeek-V3 Fixed Installer for Windows 11 Pro
-WITH 32B UNCENSORED MODEL FROM f0rc3ps- nu11secur1ty REPOSITORY
+WITH 32B UNCENSORED MODEL FROM f0rc3ps - nu11secur1ty REPOSITORY
 BY nu11secur1ty 2026
 Run: python install_deepseek.py
 """
@@ -140,6 +140,7 @@ def install_ollama_fixed():
     print("  2. Click 'Install' in the installer window")
     print("  3. Wait for the installation to finish")
     print("  4. The installer window will close automatically")
+    print("  5. CLOSE Ollama manually and press Enter")
     print()
     
     # Run installer normally (not silent)
