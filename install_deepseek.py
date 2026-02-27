@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 DeepSeek-V3 Fixed Installer for Windows 11 Pro
-WITH 32B UNCENSORED MODEL FOR SECURITY RESEARCH
+WITH 32B UNCENSORED MODEL FROM f0rc3ps- nu11secur1ty REPOSITORY
 BY nu11secur1ty 2026
 Run: python install_deepseek.py
 """
@@ -15,10 +15,11 @@ import urllib.request
 import winreg
 from pathlib import Path
 
-# Configuration - UPDATED TO 32B UNCENSORED
+# Configuration - UPDATED TO YOUR REPO!
 CONFIG = {
-    "model_name": "richardyoung/deepseek-r1-32b-uncensored",  # 19GB uncensored model
-    "model_size": "32b",     # For display purposes
+    "model_name": "f0rc3ps/deepseek-r1-32b-uncensored",  # YOUR model!
+    "model_size": "32b",
+    "repo_url": "https://ollama.com/f0rc3ps/deepseek-r1-32b-uncensored",
     "port": 3000,
 }
 
@@ -275,18 +276,23 @@ def verify_ollama_installation():
         return False
 
 def download_model_safe():
-    """Download the 32B uncensored model"""
+    """Download YOUR 32B uncensored model from f0rc3ps repo"""
     model_name = CONFIG["model_name"]
-    print_step(f"Downloading {model_name} (19GB uncensored model)...")
-    print_warning("This will take 20-60 minutes depending on your internet speed")
-    print_warning("DO NOT close this window!")
+    print_header(f"Downloading from YOUR repository")
+    print(f"Model: {model_name}")
+    print(f"Repo: {CONFIG['repo_url']}")
+    print(f"Size: 19GB")
     print()
     
     # Check if already downloaded
-    result = os.system(f"ollama list | findstr {model_name} >nul 2>&1")
+    result = os.system(f"ollama list | findstr f0rc3ps >nul 2>&1")
     if result == 0:
         print_success(f"Model {model_name} already downloaded")
         return True
+    
+    print_step(f"Pulling f0rc3ps/deepseek-r1-32b-uncensored...")
+    print_warning("This will take 20-60 minutes. DO NOT close this window!")
+    print()
     
     try:
         # Simple download - let it show progress naturally
@@ -297,7 +303,7 @@ def download_model_safe():
         process.wait()
         
         if process.returncode == 0:
-            print_success(f"Model downloaded successfully!")
+            print_success(f"Model downloaded successfully from f0rc3ps repository!")
             return True
         else:
             print_error("Download failed")
@@ -311,20 +317,22 @@ def download_model_safe():
         return False
 
 def create_launchers():
-    """Create launcher scripts - NO EMOJIS"""
+    """Create launcher scripts - WITH YOUR REPO CREDITS"""
     model_name = CONFIG["model_name"]
+    repo_url = CONFIG["repo_url"]
     print_step("Creating launcher scripts...")
     
-    # NO EMOJIS - pure ASCII with encoding='utf-8' to handle any characters
     with open("chat.bat", "w", encoding='utf-8') as f:
         f.write(f"""@echo off
-title DeepSeek 32B Uncensored
+title DeepSeek 32B Uncensored - f0rc3ps Repo
 color 0A
 echo.
-echo ====== Starting DeepSeek 32B Uncensored (19GB) ======
+echo ====== DeepSeek 32B Uncensored ======
+echo ====== from f0rc3ps repository ======
 echo.
 set PATH=%PATH%;C:\\Program Files\\Ollama;C:\\Program Files (x86)\\Ollama;%USERPROFILE%\\AppData\\Local\\Programs\\Ollama;%USERPROFILE%\\AppData\\Local\\Ollama
 echo Model: {model_name}
+echo Repo: {repo_url}
 echo Type 'exit' to quit
 echo.
 ollama run {model_name}
@@ -334,21 +342,21 @@ pause
     with open("test.bat", "w", encoding='utf-8') as f:
         f.write(f"""@echo off
 color 0E
-echo Testing DeepSeek 32B Uncensored...
-echo =================================
+echo Testing DeepSeek 32B Uncensored - f0rc3ps Repo
+echo =============================================
 echo.
 set PATH=%PATH%;C:\\Program Files\\Ollama;C:\\Program Files (x86)\\Ollama;%USERPROFILE%\\AppData\\Local\\Programs\\Ollama;%USERPROFILE%\\AppData\\Local\\Ollama
 echo 1. Ollama version:
 ollama --version
 echo.
-echo 2. Installed models:
-ollama list
+echo 2. Your model:
+ollama list | findstr f0rc3ps
 echo.
 echo 3. Quick test:
-echo "Hello" | ollama run {model_name}
+echo "Hello from f0rc3ps repo!" | ollama run {model_name}
 echo.
 if %errorlevel% equ 0 (
-    echo [SUCCESS] DeepSeek is working!
+    echo [SUCCESS] Your model is working!
 ) else (
     echo [ERROR] Something went wrong
 )
@@ -358,8 +366,8 @@ pause
     # Create auto-download script for after installer closes
     with open("download_model.bat", "w", encoding='utf-8') as f:
         f.write(f"""@echo off
-echo Downloading DeepSeek 32B Uncensored model...
-echo ============================================
+echo Downloading DeepSeek 32B Uncensored model from f0rc3ps repo...
+echo ============================================================
 echo.
 set PATH=%PATH%;C:\\Program Files\\Ollama;C:\\Program Files (x86)\\Ollama;%USERPROFILE%\\AppData\\Local\\Programs\\Ollama;%USERPROFILE%\\AppData\\Local\\Ollama
 ollama pull {model_name}
@@ -368,7 +376,7 @@ echo Download complete! You can now use chat.bat
 pause
 """)
     
-    print_success("Created launcher scripts:")
+    print_success("Created launcher scripts with YOUR repository:")
     print("  - test.bat")
     print("  - chat.bat")
     print("  - download_model.bat")
@@ -390,6 +398,7 @@ def main():
     """Main installation function"""
     print_header("DeepSeek 32B Uncensored Installer")
     print(f"Model: {CONFIG['model_name']}")
+    print(f"Repository: {CONFIG['repo_url']}")
     print(f"Size: 19GB - Perfect for security research!")
     print()
     
@@ -409,16 +418,19 @@ def main():
         if verify_ollama_installation():
             start_ollama_service()
     
-    # ALWAYS create scripts (even if Ollama install "failed" but might be there)
+    # ALWAYS create scripts
     create_launchers()
     create_autostart_script()
+    
+    # Step 3: Download YOUR model
+    if ollama_installed:
+        download_model_safe()
     
     print_header("INSTALLATION RESULTS")
     
     if ollama_installed:
         print_success("Ollama installed successfully!")
     else:
-        # Double-check one more time
         if verify_ollama_installation():
             print_success("Ollama detected (installation succeeded)!")
             ollama_installed = True
@@ -428,19 +440,20 @@ def main():
     
     print(f"""
 {colors.cyan('Files created:')}
-   {colors.green('test.bat')}           -> Test Ollama
-   {colors.green('chat.bat')}           -> Chat (after model downloaded)
-   {colors.green('download_model.bat')} -> DOWNLOAD THE 19GB MODEL
+   {colors.green('test.bat')}           -> Test YOUR model
+   {colors.green('chat.bat')}           -> Chat with YOUR model
+   {colors.green('download_model.bat')} -> Download YOUR 19GB model
    {colors.green('start_download.vbs')} -> Silent background download
 
+{colors.yellow('YOUR REPOSITORY:')}
+   {colors.green(CONFIG['repo_url'])}
+
 {colors.yellow('NEXT STEPS:')}
-1. {colors.green('DOUBLE-CLICK download_model.bat')} to start downloading the 19GB model
-
+1. {colors.green('DOUBLE-CLICK download_model.bat')} to start downloading YOUR model
 2. Wait 20-60 minutes for download to complete
+3. Double-click {colors.green('chat.bat')} to start chatting
 
-3. Then double-click {colors.green('chat.bat')} to start chatting
-
-{colors.blue('For CVE research - this model has NO FILTERS!')}
+{colors.blue('For CVE research - YOUR model has NO FILTERS!')}
     """)
 
 if __name__ == "__main__":
