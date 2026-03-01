@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DeepSeek Complete Uninstaller - FIXED EDITION
+DeepSeek Complete Uninstaller
 REMOVES everything the installer created
 KEEPS itself and the installer script
 BY nu11secur1ty 2026
